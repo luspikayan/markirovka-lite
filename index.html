@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Маркировка-Лайт</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Tahoma,sans-serif;background:#1a1a2e;color:#eee;min-height:100vh;padding:20px}
+.container{max-width:1300px;margin:0 auto}
+
+/* ---------- Шапка продукта ---------- */
+.app-header{text-align:center;margin-bottom:22px}
+.logo-mark{font-size:2.6em;line-height:1;display:block;margin-bottom:6px;filter:drop-shadow(0 0 14px rgba(0,212,255,.5))}
+.app-title{font-size:2.1em;font-weight:800;letter-spacing:.5px;background:linear-gradient(90deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;text-transform:uppercase}
+.app-sub{color:#8aa;margin-top:4px;font-size:.95em}
+
+/* ---------- Вкладки ---------- */
+.tabs{display:flex;gap:6px;border-bottom:1px solid #0f3460;margin-bottom:18px;flex-wrap:wrap}
+.tab-btn{padding:11px 20px;background:transparent;border:none;border-bottom:3px solid transparent;color:#8aa;cursor:pointer;font-size:.98em;font-weight:600;transition:all .2s;display:flex;align-items:center;gap:7px}
+.tab-btn:hover{color:#cde}
+.tab-btn.active{color:#00d4ff;border-bottom-color:#00d4ff}
+.tab-btn.locked{opacity:.5;cursor:not-allowed}
+.tab-btn .badge{background:#ffd43b;color:#1a1a2e;font-size:.62em;padding:1px 6px;border-radius:8px;font-weight:bold}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.placeholder-tool{text-align:center;padding:60px 20px;color:#8aa;background:#16213e;border-radius:12px;border:1px dashed #0f3460}
+.placeholder-tool .big{font-size:3em;margin-bottom:14px;opacity:.6}
+.placeholder-tool h3{color:#00d4ff;margin-bottom:8px}
+
+/* ============================================================
+   ПОЛНОЭКРАННЫЙ ИНДИКАТОР ЗАГРУЗКИ — БОЛЬШОЕ КОЛЬЦО
+   ============================================================ */
+.fullscreen-loader{position:fixed;inset:0;z-index:9999;background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:34px;transition:opacity .5s ease}
+.fullscreen-loader.hidden{opacity:0;pointer-events:none}
+.fl-logo{font-size:clamp(3em,6vmin,5em);filter:drop-shadow(0 0 22px rgba(0,212,255,.5))}
+.fl-name{font-size:clamp(1.4em,3.5vmin,2.4em);font-weight:800;letter-spacing:1px;background:linear-gradient(90deg,#00d4ff,#00ff88);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;text-transform:uppercase}
+.fl-status{color:#8aa;font-size:clamp(.95em,2vmin,1.2em);min-height:1.4em;text-align:center}
+
+/* Контейнер кольца — занимает большую часть экрана */
+.ring-container{
+ position:relative;
+ width:min(70vw, 60vh);
+ height:min(70vw, 60vh);
+ max-width:500px;
+ max-height:500px;
+ min-width:200px;
+ min-height:200px;
+}
+
+/* Точки кольца — позиционируются через JS */
+.ring-dot{
+ position:absolute;
+ border-radius:50%;
+ background:#3a4a6b;
+ transition:all .3s ease;
+}
+.ring-dot.pulse{
+ animation:dotPulse 1.6s infinite ease-in-out;
+}
+@keyframes dotPulse{
+ 0%,100%{opacity:.2;transform:scale(.8)}
+ 50%{opacity:1;transform:scale(1.2);box-shadow:0 0 20px rgba(0,212,255,.8)}
+}
+.ring-container.done .ring-dot{
+ animation:none;
+ opacity:1;
+ background:#00ff88;
+ box-shadow:0 0 20px rgba(0,255,136,.7);
+ transform:scale(1);
+}
+.ring-container.fail .ring-dot{
+ animation:none;
+ opacity:1;
+ background:#ff6b6b;
+ box-shadow:0 0 20px rgba(255,107,107,.7);
+ transform:scale(1);
+}
+
+/* ---------- Баннер статуса (после загрузки) ---------- */
+.banner{border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:.9em;line-height:1.5;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.banner.ok{background:rgba(0,255,136,.08);border:1px solid #00ff88;color:#9dfcc4}
+.banner.err{background:rgba(255,107,107,.08);border:1px solid #ff6b6b;color:#ffb3b3}
+.banner code{background:#0d1117;padding:1px 6px;border-radius:4px;color:#74c0fc;font-size:.92em}
+.banner .reload{margin-left:auto;padding:4px 12px;border:1px solid currentColor;border-radius:6px;background:transparent;color:inherit;cursor:pointer;font-size:.85em}
+
+/* ---------- Очередь файлов ---------- */
+.queue{background:#16213e;border-radius:8px;padding:12px;margin-bottom:16px;border:1px solid #0f3460;display:none}
+.queue.active{display:block}
+.queue-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.queue-head h3{color:#00d4ff;font-size:1em}
+.queue-clear{background:transparent;border:1px solid #ff6b6b;color:#ff6b6b;border-radius:6px;padding:3px 10px;font-size:.8em;cursor:pointer}
+.queue-clear:hover{background:rgba(255,107,107,.1)}
+.qrow{display:flex;align-items:center;gap:10px;padding:6px 8px;background:#1a1a2e;border-radius:6px;margin-bottom:4px;font-size:.85em}
+.qrow .qname{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Courier New',monospace}
+.qrow .qsize{color:#888;flex-shrink:0}
+.qrow .qstat{flex-shrink:0;padding:2px 8px;border-radius:4px;font-size:.8em}
+.qstat.pending{background:#0f3460;color:#74c0fc}
+.qstat.working{background:#3a4a6b;color:#ffd43b}
+.qstat.done{background:rgba(0,255,136,.15);color:#9dfcc4}
+.qstat.fail{background:rgba(255,107,107,.15);color:#ffb3b3}
+.qrow .qdel{background:transparent;border:none;color:#888;cursor:pointer;font-size:1.1em;padding:0 4px}
+.qrow .qdel:hover{color:#ff6b6b}
+
+/* ---------- Настройки ---------- */
+.settings{background:#16213e;border-radius:8px;padding:14px;margin-bottom:16px;border:1px solid #0f3460}
+.settings label{display:block;margin-bottom:4px;color:#aaa;font-size:.9em}
+.settings select,.settings input[type=text]{width:100%;padding:7px 10px;border-radius:6px;border:1px solid #0f3460;background:#1a1a2e;color:#eee;font-size:.95em;margin-bottom:8px}
+.srow{display:flex;gap:14px;flex-wrap:wrap}.srow>div{flex:1;min-width:180px}
+.chk{display:flex!important;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer}.chk input{width:auto;margin:0}
+.save-mode{display:none;gap:8px;align-items:center;margin-top:6px;padding:8px;background:#1a1a2e;border-radius:6px;border:1px dashed #0f3460}
+.save-mode.visible{display:flex}
+.save-mode span{color:#ffd43b;font-size:.85em}
+.save-mode select{width:auto;margin:0;padding:4px 8px;font-size:.9em}
+
+/* ---------- Upload area ---------- */
+.upload-area{border:2px dashed #00d4ff;border-radius:12px;padding:32px;text-align:center;cursor:pointer;margin-bottom:16px;background:rgba(0,212,255,.05)}
+.upload-area:hover,.upload-area.dragover{background:rgba(0,212,255,.15);border-color:#00ff88}
+.upload-area .icon{font-size:2.4em;margin-bottom:6px}
+input[type=file]{display:none}
+
+/* ---------- Прогресс ---------- */
+.progress-container{display:none;margin-bottom:16px}
+.progress-bar{width:100%;height:22px;background:#16213e;border-radius:11px;overflow:hidden;border:1px solid #0f3460}
+.progress-fill{height:100%;background:linear-gradient(90deg,#00d4ff,#00ff88);width:0;display:flex;align-items:center;justify-content:center;font-size:.8em;font-weight:bold;color:#1a1a2e;transition:width .2s}
+.status{text-align:center;margin:8px 0;color:#aaa;font-size:.95em}
+
+/* ---------- Результаты ---------- */
+.results{display:none;margin-top:16px}.results h2{color:#00ff88;margin-bottom:12px}
+.code-list{background:#16213e;border-radius:8px;padding:12px;max-height:380px;overflow-y:auto;margin-bottom:12px;border:1px solid #0f3460}
+.code-item{padding:8px 12px;margin-bottom:6px;background:#1a1a2e;border-radius:6px;font-family:'Courier New',monospace;font-size:.8em;word-break:break-all;border-left:3px solid #00d4ff;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.code-item .pn{background:#0f3460;color:#00d4ff;padding:2px 8px;border-radius:4px;font-size:.85em;flex-shrink:0}
+.code-item .fmt{background:#1d3557;color:#ffd166;padding:2px 6px;border-radius:4px;font-size:.78em;flex-shrink:0}
+.code-item .ct{flex:1 1 100%}
+.code-item.success{border-left-color:#00ff88}.code-item.error{border-left-color:#ff4444}
+.btn{padding:11px 20px;border:none;border-radius:8px;font-size:.95em;cursor:pointer;font-weight:bold;color:#1a1a2e;background:linear-gradient(135deg,#00d4ff,#00ff88)}
+.btn:disabled{opacity:.45;cursor:not-allowed}.btn.alt{background:linear-gradient(135deg,#ff6b6b,#ffa500)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+
+/* ---------- Лог ---------- */
+.log{background:#0d1117;border-radius:8px;padding:10px;margin-top:14px;max-height:260px;overflow-y:auto;font-family:'Courier New',monospace;font-size:.78em;color:#8b949e}
+.log .e{color:#ff6b6b}.log .s{color:#51cf66}.log .i{color:#74c0fc}.log .w{color:#ffd43b}
+
+/* ---------- Предпросмотр со скроллом (3 строки) ---------- */
+.preview-section{display:none;margin:16px 0;background:#16213e;border-radius:8px;padding:14px;border:1px solid #0f3460}
+.preview-section h3{color:#00d4ff;margin-bottom:10px}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;max-height:calc(3 * 190px + 2 * 14px);overflow-y:auto;padding-right:6px}
+.preview-item{background:#1a1a2e;border-radius:6px;padding:8px;text-align:center}
+.preview-item canvas{max-width:100%;border:1px solid #0f3460;border-radius:4px;background:#fff}
+.preview-item .pl{margin-top:4px;font-size:.82em;color:#aaa}
+
+/* ---------- Контакты в правом нижнем углу ---------- */
+.contacts-fixed{position:fixed;bottom:16px;right:16px;background:#16213e;border:1px solid #0f3460;border-radius:10px;padding:14px 18px;z-index:1000;box-shadow:0 4px 20px rgba(0,0,0,.4);font-size:.88em;line-height:1.6}
+.contacts-fixed .name{color:#00d4ff;font-weight:bold;margin-bottom:4px}
+.contacts-fixed a{color:#ccc;text-decoration:none;cursor:pointer;transition:color .2s;display:inline-flex;align-items:center;gap:6px}
+.contacts-fixed a:hover{color:#00ff88}
+.contacts-fixed .copy-hint{font-size:.75em;color:#555;margin-left:4px;opacity:0;transition:opacity .3s}
+.contacts-fixed a.copied .copy-hint{opacity:1;color:#00ff88}
+@media(max-width:600px){.contacts-fixed{bottom:8px;right:8px;left:8px;font-size:.82em}.app-title{font-size:1.5em}}
+</style>
+</head>
+<body>
+
+<!-- ===== ПОЛНОЭКРАННЫЙ ИНДИКАТОР ЗАГРУЗКИ ДВИЖКА ===== -->
+<div class="fullscreen-loader" id="fsLoader">
+ <span class="fl-logo">🏷️</span>
+ <span class="fl-name">Маркировка‑Лайт</span>
+ <div class="ring-container" id="ringContainer">
+  <!-- Точки создаются через JavaScript -->
+ </div>
+ <div class="fl-status" id="flStatus">Инициализация движка распознавания…</div>
+</div>
+
+<div class="container" id="mainApp" style="visibility:hidden">
+
+ <!-- Шапка продукта -->
+ <header class="app-header">
+  <span class="logo-mark">🏷️</span>
+  <h1 class="app-title">Маркировка‑Лайт</h1>
+  <div class="app-sub">Инструменты для работы с кодами маркировки «Честный Знак»</div>
+ </header>
+
+ <!-- Вкладки -->
+ <nav class="tabs">
+  <button class="tab-btn active" data-tab="pdf">📄 Из PDF в CSV</button>
+  <button class="tab-btn locked" data-tab="scanner">📷 Повторная печать DataMatrix <span class="badge">скоро</span></button>
+  <button class="tab-btn locked" data-tab="printer">🖨️ Печать этикеток из CSV <span class="badge">скоро</span></button>
+ </nav>
+
+ <!-- Панель: Чтение PDF -->
+ <section class="tab-panel active" id="panel-pdf">
+
+  <div id="engineBanner" class="banner ok" style="display:none">
+   <span id="bannerText">✅ Движок готов.</span>
+  </div>
+
+  <div class="settings">
+   <div class="srow">
+    <div><label>Масштаб рендеринга страниц</label>
+     <select id="scale">
+      <option value="4">4x</option>
+      <option value="6">6x</option>
+      <option value="8" selected>8x (рекомендуется)</option>
+      <option value="12">12x</option>
+      <option value="16">16x</option>
+     </select>
+    </div>
+    <div><label>Имя файла CSV</label><input type="text" id="outName" value="datamatrix_results"></div>
+   </div>
+   <div class="srow">
+    <div>
+     <label class="chk"><input type="checkbox" id="showPrev" checked> Показывать предпросмотр</label>
+     <label class="chk"><input type="checkbox" id="alsoQR" checked> Также ловить QR</label>
+    </div>
+    <div>
+     <label class="chk"><input type="checkbox" id="retryBig" checked> Fallback: ×2 масштаб, если не прочиталось</label>
+     <label class="chk"><input type="checkbox" id="retryInv" checked> Fallback: инверсия, если не прочиталось</label>
+    </div>
+   </div>
+   <div class="save-mode" id="saveModeWrap">
+    <span>💾 Сохранение:</span>
+    <select id="saveMode">
+     <option value="single">одним файлом (все коды подряд)</option>
+     <option value="split">разными файлами (_01, _02 …)</option>
+    </select>
+   </div>
+  </div>
+
+  <div class="queue" id="queueBox">
+   <div class="queue-head">
+    <h3>📎 Очередь файлов (<span id="qCount">0</span>)</h3>
+    <button class="queue-clear" onclick="clearQueue()">Очистить всё</button>
+   </div>
+   <div id="queueList"></div>
+  </div>
+
+  <div class="upload-area" id="ua">
+   <div class="icon">📄</div>
+   <p>Перетащите один или несколько PDF сюда<br>(или нажмите для выбора)</p>
+   <p style="font-size:.85em;color:#888">DataMatrix / QR, по одному на странице</p>
+   <input type="file" id="fi" accept=".pdf,application/pdf" multiple>
+  </div>
+
+  <div class="progress-container" id="pc">
+   <div class="progress-bar"><div class="progress-fill" id="pf">0%</div></div>
+   <div class="status" id="st">…</div>
+  </div>
+
+  <div class="preview-section" id="ps"><h3>👁️ Предпросмотр страниц</h3><div class="preview-grid" id="pg"></div></div>
+
+  <div class="results" id="rs">
+   <h2>📋 Распознанные коды (<span id="cc">0</span>)</h2>
+   <div class="code-list" id="cl"></div>
+   <div class="btn-row">
+    <button class="btn" id="dRaw" onclick="dl('raw')" disabled>💾 Скачать CSV (бинарный GS 0x1D)</button>
+    <button class="btn alt" id="dSimple" onclick="dl('simple')" disabled>💾 Скачать CSV (GS → ␝, для чтения)</button>
+   </div>
+  </div>
+
+  <div class="log" id="lg"></div>
+ </section>
+
+ <!-- Панель: Сканер (заглушка) -->
+ <section class="tab-panel" id="panel-scanner">
+  <div class="placeholder-tool">
+   <div class="big">📷</div>
+   <h3>Повторная печать DataMatrix</h3>
+   <p>Считывание кодов маркировки с камеры устройства,<br>повторное распознавание и отправка на принтер.<br><br><b>Инструмент находится в разработке.</b></p>
+  </div>
+ </section>
+
+ <!-- Панель: Печать (заглушка) -->
+ <section class="tab-panel" id="panel-printer">
+  <div class="placeholder-tool">
+   <div class="big">🖨️</div>
+   <h3>Печать этикеток из CSV</h3>
+   <p>Загрузка CSV с кодами маркировки «Честный Знак»<br>и массовая печать этикеток на термопринтере.<br><br><b>Инструмент находится в разработке.</b></p>
+  </div>
+ </section>
+
+</div><!-- /.container -->
+
+<!-- Контакты в правом нижнем углу -->
+<div class="contacts-fixed">
+ <div class="name">ИП Луспикаян Руслан Сергеевич</div>
+ <a href="#" data-copy="ruslan@luspikayan.ru">✉ ruslan@luspikayan.ru<span class="copy-hint">✓ Скопировано</span></a><br>
+ <a href="#" data-copy="+7 (989) 517-98-81">📞 +7 (989) 517-98-81<span class="copy-hint">✓ Скопировано</span></a>
+</div>
+
+<script type="module">
+window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const $ = id => document.getElementById(id);
+const GS = '\u001D';
+let rows = [];
+let READ = null;
+let didHexDump = false;
+let queue = [];
+let processing = false;
+let uidCounter = 0;
+
+/* ============================================================
+   СОЗДАНИЕ КОЛЬЦА ЗАГРУЗКИ ЧЕРЕЗ JAVASCRIPT
+   ============================================================ */
+function createLoadingRing(containerId, numDots = 16) {
+  const container = $(containerId);
+  if (!container) return;
+  
+  // Очищаем контейнер
+  container.innerHTML = '';
+  
+  // Получаем размеры контейнера
+  const rect = container.getBoundingClientRect();
+  const size = Math.min(rect.width, rect.height);
+  const centerX = size / 2;
+  const centerY = size / 2;
+  
+  // Радиус расположения точек (80% от половины размера)
+  const radius = size * 0.4;
+  
+  // Размер каждой точки (зависит от общего размера)
+  const dotSize = Math.max(20, Math.min(size * 0.08, 40));
+  
+  for (let i = 0; i < numDots; i++) {
+    const angle = (i / numDots) * 2 * Math.PI - Math.PI / 2; // Начинаем сверху
+    
+    const x = centerX + radius * Math.cos(angle) - dotSize / 2;
+    const y = centerY + radius * Math.sin(angle) - dotSize / 2;
+    
+    const dot = document.createElement('div');
+    dot.className = 'ring-dot pulse';
+    dot.style.cssText = `
+      left: ${x}px;
+      top: ${y}px;
+      width: ${dotSize}px;
+      height: ${dotSize}px;
+      animation-delay: ${(i / numDots) * 1.6}s;
+    `;
+    
+    container.appendChild(dot);
+  }
+}
+
+// Пересоздаём кольцо при изменении размера окна
+window.addEventListener('resize', () => {
+  requestAnimationFrame(() => createLoadingRing('ringContainer', 16));
+});
+
+/* ============================================================
+   КОПИРОВАНИЕ КОНТАКТОВ (надёжный вариант с fallback)
+   ============================================================ */
+function copyText(text){
+  return new Promise((resolve,reject)=>{
+    if(navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(text).then(resolve).catch(()=>legacyCopy(text)?resolve():reject());
+    } else {
+      legacyCopy(text)?resolve():reject();
+    }
+  });
+}
+function legacyCopy(text){
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text;ta.setAttribute('readonly','');
+    ta.style.position='absolute';ta.style.left='-9999px';
+    document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,text.length);
+    const ok=document.execCommand('copy');
+    document.body.removeChild(ta);return ok;
+  }catch(e){return false;}
+}
+document.querySelectorAll('.contacts-fixed a[data-copy]').forEach(a=>{
+  a.addEventListener('click',async e=>{
+    e.preventDefault();
+    const txt=a.getAttribute('data-copy');
+    try{ await copyText(txt); a.classList.add('copied'); setTimeout(()=>a.classList.remove('copied'),2000); }
+    catch(_){ /* молча — clipboard может быть заблокирован политикой */ }
+  });
+});
+
+/* ============================================================
+   СИСТЕМА ВКЛАДОК
+   ============================================================ */
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const tab=btn.dataset.tab;
+    if(btn.classList.contains('locked')){
+      log(`Инструмент «${btn.textContent.replace(/скоро$/,'').trim()}» скоро будет доступен`,'w');
+      return;
+    }
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b===btn));
+    document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.id==='panel-'+tab));
+  });
+});
+
+/* ============================================================
+   ЗАГРУЗКА ДВИЖКА + ПОЛНОЭКРАННЫЙ ИНДИКАТОР
+   ============================================================ */
+const ENGINE_CANDIDATES = [
+  { url: 'https://esm.sh/zxing-wasm' },
+  { url: 'https://esm.sh/zxing-wasm/dist/reader' },
+  { url: 'https://cdn.jsdelivr.net/npm/zxing-wasm/+esm' },
+];
+const MIN_LOADER_MS = 2000;
+async function loadEngine(){
+  // Создаём кольцо загрузки
+  createLoadingRing('ringContainer', 16);
+  
+  const t0=performance.now();
+  const errs=[];
+  for(let i=0;i<ENGINE_CANDIDATES.length;i++){
+    $('flStatus').textContent=`Инициализация движка распознавания… (источник ${i+1}/${ENGINE_CANDIDATES.length})`;
+    try{
+      const mod = await import(ENGINE_CANDIDATES[i].url);
+      const fn = mod.readBarcodesFromImageData || (mod.default && mod.default.readBarcodesFromImageData);
+      if(typeof fn!=='function') throw new Error('нет нужной функции');
+      READ = fn.bind(mod);
+      
+      const elapsed=performance.now()-t0;
+      const wait=Math.max(0,MIN_LOADER_MS-elapsed);
+      if(wait>0) await sleep(wait);
+      
+      const totalSec=((performance.now()-t0)/1000).toFixed(1);
+      setRingState('done');
+      $('flStatus').textContent=`✅ Движок готов за ${totalSec} с`;
+      log(`Движок загружен за ${totalSec} с`,'s');
+      await sleep(450);
+      hideFullscreenLoader();
+      showReadyBanner(totalSec);
+      return true;
+    }catch(e){ const m=(e&&(e.message||e))+''; errs.push(m); log(`⚠️ Источник ${i+1}: ${m}`,'w'); }
+  }
+  
+  const elapsed=performance.now()-t0;
+  if(elapsed<MIN_LOADER_MS) await sleep(MIN_LOADER_MS-elapsed);
+  setRingState('fail');
+  $('flStatus').innerHTML='❌ Не удалось загрузить движок';
+  log(`❌ Ошибка загрузки движка: ${errs.join('; ')}`,'e');
+  await sleep(1200);
+  hideFullscreenLoader();
+  showErrorBanner(errs);
+  return false;
+}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function setRingState(state){ 
+  const ring=$('ringContainer');
+  ring.className='ring-container'+(state==='done'?' done':state==='fail'?' fail':'');
+}
+function hideFullscreenLoader(){ 
+  $('fsLoader').classList.add('hidden'); 
+  $('mainApp').style.visibility='visible'; 
+  setTimeout(()=>{$('fsLoader').style.display='none'},500); 
+}
+function showReadyBanner(sec){
+  const b=$('engineBanner'); b.className='banner ok'; b.style.display='flex';
+  $('bannerText').innerHTML=`✅ Движок готов (за ${sec} с). FullCode сохраняется с бинарным GS (<code>0x1D</code>). Можно грузить PDF.`;
+}
+function showErrorBanner(errs){
+  const b=$('engineBanner'); b.className='banner err'; b.style.display='flex';
+  const isFile=location.protocol==='file:';
+  $('bannerText').innerHTML='❌ Не удалось загрузить движок.'+
+    (isFile?' Открыто как <code>file://</code> — браузер блокирует WASM/ESM. Запустите локальный сервер: <code>python -m http.server 8000</code>.':'')+
+    '<button class="reload" onclick="window.__reloadEngine()">🔄 Повторить</button>';
+}
+window.__reloadEngine=async()=>{
+  $('fsLoader').style.display='flex';$('fsLoader').classList.remove('hidden');
+  setRingState('loading');$('flStatus').textContent='Повторная загрузка движка…';
+  await loadEngine();
+};
+function escapeHtml(s){return (s+'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function log(m,t='i'){const ts=new Date().toLocaleTimeString();const c={e:'e',s:'s',w:'w'}[t]||'i';$('lg').innerHTML+=`<div class="${c}">[${ts}] ${escapeHtml(m)}</div>`;$('lg').scrollTop=1e9;}
+
+/* ============================================================
+   ОСТАЛЬНОЙ КОД (без изменений)
+   ============================================================ */
+function genId(){ return 'f_' + (++uidCounter) + '_' + Date.now().toString(36); }
+function addToQueue(files){
+  const list=[...files].filter(f=>f.type==='application/pdf'||/\.pdf$/i.test(f.name));
+  if(!list.length){ log('В выборке нет PDF-файлов','w'); return; }
+  list.forEach(f=>queue.push({id:genId(),file:f,status:'pending'}));
+  renderQueue(); updateSaveModeVisibility();
+  log(`Добавлено в очередь: ${list.length} файл(ов)`,'i');
+  if(!processing) startProcessing();
+}
+function removeFromQueue(id){
+  queue=queue.filter(q=>q.id!==id);
+  renderQueue(); updateSaveModeVisibility();
+  if(!queue.length){ $('rs').style.display='none'; ['dRaw','dSimple'].forEach(x=>$(x).disabled=true); }
+}
+window.clearQueue=function(){
+  if(processing){ log('Дождитесь окончания обработки','w'); return; }
+  queue=[]; renderQueue(); updateSaveModeVisibility();
+  $('rs').style.display='none';['dRaw','dSimple'].forEach(x=>$(x).disabled=true);
+  $('pg').innerHTML='';$('ps').style.display='none';
+}
+function renderQueue(){
+  const box=$('queueBox');
+  if(!queue.length){ box.classList.remove('active'); return; }
+  box.classList.add('active');
+  $('qCount').textContent=queue.length;
+  $('queueList').innerHTML=queue.map(q=>{
+    const kb=(q.file.size/1024).toFixed(1);
+    const statMap={pending:['ожидает','pending'],working:['обрабатывается','working'],done:['готово','done'],fail:['ошибка','fail']};
+    const [txt,cls]=statMap[q.status]||['—','pending'];
+    return `<div class="qrow" data-qid="${q.id}">
+      <span class="qname">${escapeHtml(q.file.name)}</span>
+      <span class="qsize">${kb} КБ</span>
+      <span class="qstat ${cls}">${txt}</span>
+      <button class="qdel" title="Удалить">×</button>
+    </div>`;
+  }).join('');
+  $('queueList').querySelectorAll('.qdel').forEach(btn=>{
+    btn.addEventListener('click',(e)=>{
+      const row=e.target.closest('.qrow');
+      if(row) removeFromQueue(row.dataset.qid);
+    });
+  });
+}
+function updateSaveModeVisibility(){
+  $('saveModeWrap').classList.toggle('visible', queue.length>1);
+}
+
+const ua=$('ua'),fi=$('fi');
+ua.onclick=()=>fi.click();
+ua.ondragover=e=>{e.preventDefault();ua.classList.add('dragover')};
+ua.ondragleave=()=>ua.classList.remove('dragover');
+ua.ondrop=e=>{e.preventDefault();ua.classList.remove('dragover');addToQueue(e.dataTransfer.files)};
+fi.onchange=e=>{if(e.target.files.length){addToQueue(e.target.files);fi.value=''}};
+
+function renderPage(page,scale,smooth=true){
+ return new Promise((res,rej)=>{
+  const vp=page.getViewport({scale});
+  const cv=document.createElement('canvas');cv.width=Math.ceil(vp.width);cv.height=Math.ceil(vp.height);
+  const ctx=cv.getContext('2d',{alpha:false});ctx.imageSmoothingEnabled=smooth;ctx.imageSmoothingQuality='high';
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,cv.width,cv.height);
+  page.render({canvasContext:ctx,viewport:vp}).promise.then(()=>res(cv)).catch(rej);
+ });
+}
+function invertImageData(id){const d=id.data;for(let i=0;i<d.length;i+=4){d[i]=255-d[i];d[i+1]=255-d[i+1];d[i+2]=255-d[i+2];}return id;}
+
+function bytesToString(b){if(!b||!b.length)return '';let s='';for(let i=0;i<b.length;i++)s+=String.fromCharCode(b[i]&0xff);return s;}
+const FIXED_LEN={'00':18,'01':14,'02':14,'11':6,'12':6,'13':6,'15':6,'17':6,'20':2};
+function bracketedToRaw(s){const parts=[],re=/\((\d{2,4})\)([^()]*)/g;let m;while((m=re.exec(s)))parts.push({ai:m[1],val:m[2]});let out='';for(let i=0;i<parts.length;i++){if(i>0&&FIXED_LEN[parts[i-1].ai]===undefined)out+=GS;out+=parts[i].ai+parts[i].val;}return out;}
+function makeRaw(r){const fb=bytesToString(r.bytes);if(fb)return fb;if(r.text&&r.text.includes(GS))return r.text;return bracketedToRaw(r.text||'');}
+
+function formatsList(){const f=['DataMatrix'];if($('alsoQR').checked)f.push('QRCode');return f;}
+async function detectOn(cv,invert=false){let id=cv.getContext('2d').getImageData(0,0,cv.width,cv.height);if(invert)id=invertImageData(id);try{const res=await READ(id,{tryHarder:true,formats:formatsList()});return(res||[]).map(r=>({raw:makeRaw(r),text:r.text,fmt:r.format}))}catch(e){return[]}}
+async function readPage(page,baseScale){const cfgs=[[baseScale,false]];if($('retryInv').checked)cfgs.push([baseScale,true]);if($('retryBig').checked&&baseScale<16){const big=Math.min(baseScale*2,16);cfgs.push([big,false]);if($('retryInv').checked)cfgs.push([big,true]);}let lastCv=null;for(const[sc,inv]of cfgs){const cv=await renderPage(page,sc,true);lastCv=cv;const found=await detectOn(cv,inv);if(found.length){log(`  → прочитано на ${sc}x${inv?' +инверсия':''}: ${found.length} код(ов)`,'s');return{found,cv}}}return{found:[],cv:lastCv}}
+function hexDump(s,n=44){let h='';for(let i=0;i<Math.min(n,s.length);i++){const c=s.charCodeAt(i);h+=(c<16?'0':'')+c.toString(16)+' '}return h.trim()}
+
+async function startProcessing(){
+  if(processing) return;
+  if(!READ){ log('Движок не готов — см. баннер сверху.','e'); return; }
+  processing=true;
+  rows=[];$('cl').innerHTML='';$('pg').innerHTML='';didHexDump=false;
+  $('rs').style.display='none';$('ps').style.display='none';$('pc').style.display='block';
+  ['dRaw','dSimple'].forEach(id=>$(id).disabled=true);
+
+  const baseScale=+$('scale').value, showPrev=$('showPrev').checked;
+  const totalFiles=queue.length;
+
+  let totalPagesEstimate = 0;
+  const pageInfo = [];
+  for(let i=0;i<queue.length;i++){
+    try{
+      const buf=await queue[i].file.arrayBuffer();
+      const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+      const N=pdf.numPages;
+      pageInfo.push({idx:i, name:queue[i].file.name, pages:N});
+      totalPagesEstimate += N;
+    }catch(e){
+      pageInfo.push({idx:i, name:queue[i].file.name, pages:1});
+      totalPagesEstimate += 1;
+    }
+  }
+
+  log(`Запуск обработки: ${totalFiles} файл(ов), ~${totalPagesEstimate} страниц, масштаб ${baseScale}x`,'i');
+
+  let globalPage=0;
+
+  try{
+    for(let fi_=0;fi_<queue.length;fi_++){
+      const q=queue[fi_];
+      const info = pageInfo.find(p=>p.idx===fi_) || {pages:1};
+      q.status='working';renderQueue();
+      log(`▶ Файл ${fi_+1}/${totalFiles}: ${q.file.name} (${(q.file.size/1024).toFixed(1)} КБ, ${info.pages} стр.)`,'i');
+
+      try{
+        const buf=await q.file.arrayBuffer();
+        const pdf=await window.pdfjsLib.getDocument({data:buf}).promise;
+        const N=pdf.numPages;
+
+        if(showPrev)$('ps').style.display='block';
+
+        for(let p=1;p<=N;p++){
+          globalPage++;
+          const pr = totalPagesEstimate > 0 ? Math.round(globalPage / totalPagesEstimate * 100) : 100;
+          $('pf').style.width=pr+'%';$('pf').textContent=pr+'%';
+          $('st').textContent=`Файл ${fi_+1}/${totalFiles}, стр. ${p}/${N} (всего ${globalPage}/${totalPagesEstimate})`;
+
+          try{
+            const page=await pdf.getPage(p);
+            const {found,cv}=await readPage(page,baseScale);
+            if(showPrev&&cv)prevItem(cv,globalPage,q.file.name);
+
+            if(found.length){
+              for(const f of found){
+                if(!didHexDump){log('hex raw (первые байты, ищите 1d = GS): '+hexDump(f.raw),'i');didHexDump=true;}
+                rows.push({page:globalPage,fileIdx:fi_,fileName:q.file.name,raw:f.raw,format:f.fmt,ok:true});
+                codeItem(globalPage,f.raw,f.fmt,true,q.file.name);
+              }
+              log(`  стр.${globalPage}: OK (${found.length})`,'s');
+            }else{
+              rows.push({page:globalPage,fileIdx:fi_,fileName:q.file.name,ok:false});
+              codeItem(globalPage,null,'',false,q.file.name);
+              log(`  стр.${globalPage}: не распознан`,'w');
+            }
+          }catch(pe){
+            log(`  ошибка стр.${globalPage}: ${pe.message}`,'e');
+            rows.push({page:globalPage,fileIdx:fi_,fileName:q.file.name,ok:false});
+            codeItem(globalPage,null,'',false,q.file.name);
+          }
+        }
+        q.status='done';
+      }catch(fe){
+        log(`  ❌ Ошибка открытия файла ${q.file.name}: ${fe.message}`,'e');
+        q.status='fail';
+      }
+      renderQueue();
+    }
+
+    $('pf').style.width='100%';$('pf').textContent='100%';
+    $('st').textContent=`Готово. Обработано файлов: ${totalFiles}, страниц: ${globalPage}`;
+    $('rs').style.display='block';
+    const ok=rows.filter(r=>r.ok).length;$('cc').textContent=ok;
+    if(ok){['dRaw','dSimple'].forEach(id=>$(id).disabled=false);log(`✅ Всего распознано ${ok} код(ов) из ${globalPage} стр.`,'s');}
+    else log(`❌ Ни одного кода. Попробуйте 12–16x.`,'e');
+  }catch(e){
+    log(`Критическая ошибка цикла: ${e.message}`, 'e');
+    $('st').textContent='Ошибка: '+e.message;
+  } finally{
+    processing=false;
+  }
+}
+
+function prevItem(cv,page,fileName){
+  const it=document.createElement('div');it.className='preview-item';
+  const pc=document.createElement('canvas');const m=220,r=Math.min(m/cv.width,m/cv.height,1);
+  pc.width=Math.max(40,cv.width*r);pc.height=Math.max(40,cv.height*r);pc.getContext('2d').drawImage(cv,0,0,pc.width,pc.height);
+  it.appendChild(pc);
+  const pl=document.createElement('div');pl.className='pl';pl.textContent=`стр.${page} · ${fileName} (${cv.width}×${cv.height})`;it.appendChild(pl);
+  $('pg').appendChild(it);
+}
+function codeItem(page,raw,fmt,ok,fileName){
+  const it=document.createElement('div');it.className='code-item '+(ok?'success':'error');
+  const disp=raw?raw.split(GS).join('␝'):'';
+  it.innerHTML=`<span class="pn">стр.${page}</span>`+(fileName?`<span class="fmt">${escapeHtml(fileName)}</span>`:'')+(fmt?`<span class="fmt">${escapeHtml(fmt)}</span>`:'')+`<span class="ct">${escapeHtml(disp)||'—'}</span><span>${ok?'✅':'❌'}</span>`;
+  $('cl').appendChild(it);
+}
+function groupByFile(list){
+  const map=new Map();
+  list.forEach(r=>{
+    if(!map.has(r.fileIdx)) map.set(r.fileIdx,{idx:r.fileIdx,name:r.fileName,items:[]});
+    map.get(r.fileIdx).items.push(r);
+  });
+  return [...map.values()].sort((a,b)=>a.idx-b.idx);
+}
+window.dl=function(mode){
+  const okRows=rows.filter(r=>r.ok);
+  if(!okRows.length){alert('Нет кодов');return;}
+  const baseName=$('outName').value||'result';
+  const saveMode = queue.length>1 ? $('saveMode').value : 'single';
+
+  const buildCSV=(list)=>{
+    let s='';
+    if(mode==='simple') list.forEach(r=>{ s+=r.raw.split(GS).join('␝')+'\n'; });
+    else                list.forEach(r=>{ s+=r.raw+'\n'; });
+    return s;
+  };
+  const downloadBlob=(content,filename)=>{
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([content],{type:'text/csv;charset=utf-8;'}));
+    a.download=filename;a.click();URL.revokeObjectURL(a.href);
+  };
+
+  if(saveMode==='split'){
+    const groups=groupByFile(okRows);
+    log(`Режим «разными файлами»: ${groups.length} файл(ов)`,'i');
+    groups.forEach((g,i)=>{
+      const num=String(i+1).padStart(2,'0');
+      const fname=`${baseName}_${num}.csv`;
+      downloadBlob(buildCSV(g.items),fname);
+      log(`  сохранён ${fname} (${g.items.length} кодов, исходник: ${g.name})`,'s');
+    });
+  } else {
+    const fname=`${baseName}.csv`;
+    downloadBlob(buildCSV(okRows),fname);
+    log(`CSV сохранён: ${fname} (${okRows.length} стр., чистые коды без кавычек)`,'s');
+  }
+};
+
+(async()=>{ await loadEngine(); })();
+</script>
+</body>
+</html>
